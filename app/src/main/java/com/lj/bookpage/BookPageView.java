@@ -9,10 +9,14 @@ import android.graphics.Path;
 import android.graphics.Region;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
+import android.widget.Scroller;
 
 public class BookPageView extends View {
+    private static final String TAG = "BookPageView";
     //    private Paint pointPaint;//绘制各标识点的画笔
     private Paint bgPaint;//背景画笔
 
@@ -39,6 +43,10 @@ public class BookPageView extends View {
     private Bitmap pathAContentBitmap;
     private Bitmap pathBContentBitmap;
     private Bitmap pathCContentBitmap;
+
+    private Scroller mScroller;
+
+    private float xPrimary = 0,yPrimary = 0, xCurrent, yCurrent, xDelta, yDelta;
 
     public BookPageView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
@@ -92,6 +100,8 @@ public class BookPageView extends View {
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setSubpixelText(true);
         textPaint.setTextSize(30);
+
+        mScroller = new Scroller(context, new LinearInterpolator());
     }
 
     @Override
@@ -140,6 +150,7 @@ public class BookPageView extends View {
     }
 
     public void setDefaultPath() {
+        Log.d(TAG, "setDefaultPath");
         a.x = -1;
         a.y = -1;
         postInvalidate();
@@ -277,6 +288,7 @@ public class BookPageView extends View {
         setMeasuredDimension(width, height);
         viewWidth = width;
         viewHeight = height;
+        Log.d(TAG, "onMeasure");
         a.x = -1;
         a.y = -1;
         pathAContentBitmap = Bitmap.createBitmap((int) viewWidth, (int) viewHeight, Bitmap.Config.RGB_565);
@@ -315,34 +327,34 @@ public class BookPageView extends View {
         return result;
     }
 
-    public void setTouchPoint(float x, float y, int style) {
-        MyPoint touchPoint;
-        a.x = x;
-        a.y = y;
-        this.style = style;
-        switch (style) {
-            case STYLE_TOP_RIGHT:
-                f.x = viewWidth;
-                f.y = 0;
-                calcPointsXY(a, f);
-//                touchPoint = new MyPoint(x, y);
-//                if (c.x < 0) {
+//    public void setTouchPoint(float x, float y, int style) {
+//        MyPoint touchPoint;
+//        a.x = x;
+//        a.y = y;
+//        this.style = style;
+//        switch (style) {
+//            case STYLE_TOP_RIGHT:
+//                f.x = viewWidth;
+//                f.y = 0;
+//                calcPointsXY(a, f);
+////                touchPoint = new MyPoint(x, y);
+////                if (c.x < 0) {
+////
+////                }
+//                postInvalidate();
+//                break;
+//            case STYLE_BOTTOM_RIGHT:
+//                f.x = viewWidth;
+//                f.y = viewHeight;
+//                calcPointsXY(a, f);
+////                touchPoint = new MyPoint(x, y);
+//                postInvalidate();
+//                break;
+//            default:
+//                break;
 //
-//                }
-                postInvalidate();
-                break;
-            case STYLE_BOTTOM_RIGHT:
-                f.x = viewWidth;
-                f.y = viewHeight;
-                calcPointsXY(a, f);
-//                touchPoint = new MyPoint(x, y);
-                postInvalidate();
-                break;
-            default:
-                break;
-
-        }
-    }
+//        }
+//    }
 
     public float getViewWidth() {
         return viewWidth;
@@ -357,28 +369,136 @@ public class BookPageView extends View {
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         super.onTouchEvent(event);
+        //记录一个事件序列最初的触屏点，现在的触屏点， 和偏移的位移
+
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                float x = event.getX();
-                float y = event.getY();
+                xPrimary = event.getX();
+                yPrimary = event.getY();
+//                float x = event.getX();
+//                float y = event.getY();
 
-                if (x > viewWidth / 3 && y <= viewHeight / 3) {
-                    style = STYLE_TOP_RIGHT;
-                    setTouchPoint(x, y, style);
-                } else if (x > viewWidth / 3 && y > viewHeight * 2 / 3) {
-                    style = STYLE_BOTTOM_RIGHT;
-                    setTouchPoint(x, y, style);
-                }
+//                if (x > viewWidth / 3 && y <= viewHeight / 3) {
+//                    style = STYLE_TOP_RIGHT;
+//                    setTouchPoint(x, y, style);
+//                } else if (x > viewWidth / 3 && y > viewHeight * 2 / 3) {
+//                    style = STYLE_BOTTOM_RIGHT;
+//                    setTouchPoint(x, y, style);
+//                }
                 break;
             case MotionEvent.ACTION_MOVE:
-                setTouchPoint(event.getX(), event.getY(), style);
+//                setTouchPoint(event.getX(), event.getY(), style);
+                xCurrent = event.getX();
+                yCurrent = event.getY();
+//                Log.d(TAG, "this is a.x " + a.x + "this is a.y " + a.y + "this is f.x" + f.x + "this is f.y" + f.y);
+                xDelta = xCurrent - xPrimary;
+                yDelta = yCurrent - yPrimary;
+                boolean hasConsume = setAPointAndFPoint(xDelta, yDelta);
+                if (!hasConsume) {
+                    reSetTouchPoint();
+                }
                 break;
             case MotionEvent.ACTION_UP:
-//                startCancelAnim();
+                startCancelAnim();
                 break;
         }
         return true;
     }
+
+    private void reSetTouchPoint() {
+        xPrimary = xCurrent;
+        yPrimary = yCurrent;
+    }
+
+    //UI交互逻辑应该使由ACTION_MOVE，即手指在屏幕上滑动的方向和距离决定a，f点位置，而不是由touchpoint决定a,f点位置
+    private boolean setAPointAndFPoint(float deltaX, float deltaY) {
+        //设定一个初始最小有效滑动距离
+        if (deltaX <= -0.1 && deltaY <= -0.1) {
+            style = STYLE_BOTTOM_RIGHT;
+            f.x = viewWidth;
+            f.y = viewHeight;
+            if (calcPointCX(new MyPoint(viewWidth + deltaX, viewHeight + deltaY), f) > 0) {
+                a.x = viewWidth + deltaX;
+                a.y = viewHeight + deltaY;
+            } else {
+                xPrimary += xDelta - (a.x - viewWidth);
+                yPrimary += yDelta - (a.y - viewHeight);
+            }
+
+            calcPointsXY(a, f);
+            postInvalidate();
+            return true;
+        } else if (deltaX < -0.1 && deltaY > 0.1) {
+            style = STYLE_TOP_RIGHT;
+            f.x = viewWidth;
+            f.y = 0;
+
+            if (calcPointCX(new MyPoint(viewWidth + deltaX, 0 + deltaY), f) > 0) {
+                a.x = viewWidth + deltaX;
+                a.y = 0 + deltaY;
+            } else {
+                xPrimary += xDelta - (a.x - viewWidth);
+                yPrimary += yDelta - (a.y);
+            }
+
+            calcPointsXY(a, f);
+            postInvalidate();
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void computeScroll() {
+        if (mScroller.computeScrollOffset()) {
+            float x = mScroller.getCurrX();
+            float y = mScroller.getCurrY();
+            if(style == (STYLE_TOP_RIGHT)){
+//                setTouchPoint(x,y,STYLE_TOP_RIGHT);
+                xDelta = x - viewWidth;
+                yDelta = y;
+                setAPointAndFPoint(xDelta, yDelta);
+            }else if (style == STYLE_BOTTOM_RIGHT){
+//                setTouchPoint(x,y,STYLE_BOTTOM_RIGHT);
+                xDelta = x - viewWidth;
+                yDelta = y - viewHeight;
+                setAPointAndFPoint(xDelta, yDelta);
+            }
+            if (mScroller.getFinalX() == x && mScroller.getFinalY() == y){
+                setDefaultPath();
+//                setDefaultPoint();
+            }
+        }
+    }
+
+    private void startCancelAnim() {
+        int dx, dy;
+        if (style == STYLE_TOP_RIGHT) {
+            dx = (int) (viewWidth - 1 - a.x);
+            dy = (int) (1 - a.y);
+            mScroller.startScroll((int)a.x, (int)a.y, dx, dy, 400);
+
+        } else if (style == STYLE_BOTTOM_RIGHT) {
+            dx = (int) (viewWidth - 1 - a.x);
+            dy = (int) (viewHeight - 1 -a.y);
+            mScroller.startScroll((int)a.x, (int)a.y, dx, dy, 400);
+        }
+
+    }
+
+    private float calcPointCX(MyPoint a, MyPoint f){
+        MyPoint g,e;
+        g = new MyPoint();
+        e = new MyPoint();
+        g.x = (a.x + f.x) / 2;
+        g.y = (a.y + f.y) / 2;
+
+        e.x = g.x - (f.y - g.y) * (f.y - g.y) / (f.x - g.x);
+        e.y = f.y;
+
+        return e.x - (f.x - e.x) / 2;
+    }
+
 }
 
 
