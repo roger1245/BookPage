@@ -417,7 +417,7 @@ public class BookPageView extends View {
             style = STYLE_BOTTOM_RIGHT;
             f.x = viewWidth;
             f.y = viewHeight;
-            if (calcPointCX(new MyPoint(viewWidth + deltaX, viewHeight + deltaY), f) > 0) {
+            if (calcInterSection(new MyPoint(viewWidth + deltaX, viewHeight + deltaY), f) - viewHeight > -10) {
                 a.x = viewWidth + deltaX;
                 a.y = viewHeight + deltaY;
             } else {
@@ -433,7 +433,7 @@ public class BookPageView extends View {
             f.x = viewWidth;
             f.y = 0;
 
-            if (calcPointCX(new MyPoint(viewWidth + deltaX, 0 + deltaY), f) > 0) {
+            if (calcInterSection(new MyPoint(viewWidth + deltaX, 0 + deltaY), f) < 10) {
                 a.x = viewWidth + deltaX;
                 a.y = 0 + deltaY;
             } else {
@@ -486,17 +486,58 @@ public class BookPageView extends View {
 
     }
 
-    private float calcPointCX(MyPoint a, MyPoint f){
-        MyPoint g,e;
+//    private float calcPointCX(MyPoint a, MyPoint f){
+//        MyPoint g,e;
+//        g = new MyPoint();
+//        e = new MyPoint();
+//        g.x = (a.x + f.x) / 2;
+//        g.y = (a.y + f.y) / 2;
+//
+//        e.x = g.x - (f.y - g.y) * (f.y - g.y) / (f.x - g.x);
+//        e.y = f.y;
+//
+//        return e.x - (f.x - e.x) / 2;
+//    }
+
+
+    //计算直线cd与y轴交点的y坐标
+    private float calcInterSection(MyPoint a, MyPoint f) {
+        MyPoint g,e, h,c, j, b, k ,d, i;
         g = new MyPoint();
         e = new MyPoint();
+        h = new MyPoint();
+        c = new MyPoint();
+        j = new MyPoint();
+        b = new MyPoint();
+        k = new MyPoint();
+        d = new MyPoint();
+        i = new MyPoint();
+
         g.x = (a.x + f.x) / 2;
         g.y = (a.y + f.y) / 2;
 
         e.x = g.x - (f.y - g.y) * (f.y - g.y) / (f.x - g.x);
         e.y = f.y;
 
-        return e.x - (f.x - e.x) / 2;
+        h.x = f.x;
+        h.y = g.y - (f.x - g.x) * (f.x - g.x) / (f.y - g.y);
+
+        c.x = e.x - (f.x - e.x) / 2;
+        c.y = f.y;
+
+        j.x = f.x;
+        j.y = h.y - (f.y - h.y) / 2;
+
+        b = getIntersectionPoint(a, e, c, j);
+        k = getIntersectionPoint(a, h, c, j);
+
+        d.x = (c.x + 2 * e.x + b.x) / 4;
+        d.y = (2 * e.y + c.y + b.y) / 4;
+
+        i.x = (j.x + 2 * h.x + k.x) / 4;
+        i.y = (2 * h.y + j.y + k.y) / 4;
+
+        return getIntersectionPoint(c, d, new MyPoint(0, 0), new MyPoint(0, viewHeight)).y;
     }
 
 }
