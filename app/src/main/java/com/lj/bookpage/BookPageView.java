@@ -21,7 +21,9 @@ public class BookPageView extends View {
     private Paint bgPaint;//背景画笔
 
     public static final int STYLE_TOP_RIGHT = 1;
+    public static final int STYLE_TOP_LEFT = 2;
     public static final int STYLE_BOTTOM_RIGHT = 3;
+    public static final int STYLE_BOTTOM_LEFT = 4;
     private int style;
 
     private MyPoint a, f, g, e, h, c, j, b, k, d, i;
@@ -32,8 +34,8 @@ public class BookPageView extends View {
     private int viewHeight;
     private Paint pathAPaint;
     private Path pathA;
-    private Bitmap bitmap;
-    private Canvas bitmapCanvas;
+//    private Bitmap bitmap;
+//    private Canvas bitmapCanvas;
     private Paint pathBPaint;
     private Path pathB;
     private Paint pathCPaint;
@@ -47,6 +49,12 @@ public class BookPageView extends View {
     private Scroller mScroller;
 
     private float xPrimary = 0,yPrimary = 0, xCurrent, yCurrent, xDelta, yDelta;
+
+    private enum Mode {PREPAGE, NEXTPAGE, NORMAL};
+
+    private Mode mode = Mode.NORMAL;
+
+    private final int rate = 2;
 
     public BookPageView(Context context, @Nullable AttributeSet attrs) {
         super(context, attrs);
@@ -150,7 +158,6 @@ public class BookPageView extends View {
     }
 
     public void setDefaultPath() {
-        Log.d(TAG, "setDefaultPath");
         a.x = -1;
         a.y = -1;
         postInvalidate();
@@ -391,8 +398,10 @@ public class BookPageView extends View {
                 xCurrent = event.getX();
                 yCurrent = event.getY();
 //                Log.d(TAG, "this is a.x " + a.x + "this is a.y " + a.y + "this is f.x" + f.x + "this is f.y" + f.y);
-                xDelta = xCurrent - xPrimary;
-                yDelta = yCurrent - yPrimary;
+
+                //此处rate表示对实际手指移动距离的放大
+                xDelta = (xCurrent - xPrimary) * rate;
+                yDelta = (yCurrent - yPrimary) * rate;
                 boolean hasConsume = setAPointAndFPoint(xDelta, yDelta);
                 if (!hasConsume) {
                     reSetTouchPoint();
@@ -412,9 +421,18 @@ public class BookPageView extends View {
 
     //UI交互逻辑应该使由ACTION_MOVE，即手指在屏幕上滑动的方向和距离决定a，f点位置，而不是由touchpoint决定a,f点位置
     private boolean setAPointAndFPoint(float deltaX, float deltaY) {
+
         //设定一个初始最小有效滑动距离
         if (deltaX <= -0.1 && deltaY <= -0.1) {
+
+            //如果不是有效的模式，则直接返回false，让hasconsume来消费
+            if (mode == Mode.NEXTPAGE) {
+                return false;
+            } else if (mode == Mode.NORMAL) {
+                mode = Mode.PREPAGE;
+            }
             style = STYLE_BOTTOM_RIGHT;
+
             f.x = viewWidth;
             f.y = viewHeight;
             if (calcInterSection(new MyPoint(viewWidth + deltaX, viewHeight + deltaY), f) - viewHeight > -10) {
@@ -429,7 +447,13 @@ public class BookPageView extends View {
             postInvalidate();
             return true;
         } else if (deltaX < -0.1 && deltaY > 0.1) {
+            if (mode == Mode.NEXTPAGE) {
+                return false;
+            } else if (mode == Mode.NORMAL) {
+                mode = Mode.PREPAGE;
+            }
             style = STYLE_TOP_RIGHT;
+
             f.x = viewWidth;
             f.y = 0;
 
@@ -441,6 +465,49 @@ public class BookPageView extends View {
                 yPrimary += yDelta - (a.y);
             }
 
+            calcPointsXY(a, f);
+            postInvalidate();
+            return true;
+        } else if (deltaX > 0.1 && deltaY > 0.1) {
+            if (mode == Mode.PREPAGE) {
+                return false;
+            } else if (mode == Mode.NORMAL) {
+                mode = Mode.NEXTPAGE;
+            }
+            style = STYLE_TOP_LEFT;
+
+
+
+            f.x = viewWidth;
+            f.y = 0;
+            if (calcInterSection(new MyPoint(-viewWidth + deltaX, 0 + deltaY), f) < 10) {
+                a.x = -viewWidth + deltaX;
+                a.y = 0 + deltaY;
+            } else {
+                xPrimary += xDelta - (a.x + viewWidth);
+                yPrimary += yDelta - (a.y);
+            }
+            calcPointsXY(a, f);
+            postInvalidate();
+            return true;
+        } else if (deltaX > 0.1 && deltaY < 0.1) {
+            if (mode == Mode.PREPAGE) {
+                return false;
+            } else if (mode == Mode.NORMAL) {
+                mode = Mode.NEXTPAGE;
+            }
+            style = STYLE_BOTTOM_LEFT;
+
+            f.x = viewWidth;
+            f.y = viewHeight;
+            if (calcInterSection(new MyPoint(-viewWidth + deltaX, viewHeight + deltaY), f) > viewHeight - 10) {
+                a.x = -viewWidth + deltaX;
+                a.y = viewHeight + deltaY;
+
+            } else {
+                xPrimary += xDelta - (a.x + viewWidth);
+                yPrimary += yDelta - (a.y - viewHeight);
+            }
             calcPointsXY(a, f);
             postInvalidate();
             return true;
@@ -463,9 +530,18 @@ public class BookPageView extends View {
                 xDelta = x - viewWidth;
                 yDelta = y - viewHeight;
                 setAPointAndFPoint(xDelta, yDelta);
+            } else if (style == STYLE_TOP_LEFT){
+                xDelta = x + viewWidth;
+                yDelta = y;
+                setAPointAndFPoint(xDelta, yDelta);
+            } else if (style == STYLE_BOTTOM_LEFT){
+                xDelta = x + viewWidth;
+                yDelta = y - viewHeight;
+                setAPointAndFPoint(xDelta, yDelta);
             }
             if (mScroller.getFinalX() == x && mScroller.getFinalY() == y){
                 setDefaultPath();
+                mode = Mode.NORMAL;
 //                setDefaultPoint();
             }
         }
@@ -482,22 +558,18 @@ public class BookPageView extends View {
             dx = (int) (viewWidth - 1 - a.x);
             dy = (int) (viewHeight - 1 -a.y);
             mScroller.startScroll((int)a.x, (int)a.y, dx, dy, 400);
+        } else if (style == STYLE_TOP_LEFT) {
+            dx = (int) (-viewWidth - a.x);
+            dy = (int) (0 - a.y);
+            mScroller.startScroll((int)a.x, (int)a.y, dx, dy, 400);
+        } else if (style == STYLE_BOTTOM_LEFT) {
+            dx = (int) (-viewWidth - a.x);
+            dy = (int) (viewHeight - a.y);
+            mScroller.startScroll((int)a.x, (int)a.y, dx, dy, 400);
         }
 
     }
 
-//    private float calcPointCX(MyPoint a, MyPoint f){
-//        MyPoint g,e;
-//        g = new MyPoint();
-//        e = new MyPoint();
-//        g.x = (a.x + f.x) / 2;
-//        g.y = (a.y + f.y) / 2;
-//
-//        e.x = g.x - (f.y - g.y) * (f.y - g.y) / (f.x - g.x);
-//        e.y = f.y;
-//
-//        return e.x - (f.x - e.x) / 2;
-//    }
 
 
     //计算直线cd与y轴交点的y坐标
